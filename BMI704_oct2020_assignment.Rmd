@@ -103,7 +103,7 @@ pheatmap(metadata %>% select(-subjectID) %>% select_if(is.numeric) %>% cor)
 
 None of the correlations seem too high, so we can probably include all of them in the same model.
 
-Now let's look at the microbiome abundance data. We're going to use the dimensionality reduction technique prinicpal-componenet-analysis to see if there is any underlying structure to the data that correlates to disease presence. This plot will be colored by the metadata study_condition variable to indicate if a sample was healthy or not. Each point will correspond to a different sample.
+Now let's look at the microbiome abundance data. We're going to use the dimensionality reduction technique principal-component-analysis (https://builtin.com/data-science/step-step-explanation-principal-component-analysis) to see if there is any underlying structure to the data that correlates to disease presence. This plot will be colored by the metadata study_condition variable to indicate if a sample was healthy or not. Each point will correspond to a different sample.
 
 ```{r pca analysis}
 
