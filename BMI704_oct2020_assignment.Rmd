@@ -9,7 +9,7 @@ output:
 - Braden Tierney (btierney <at> g dot harvard dot edu)
 - Twitter: @BradenTierney
 - GitHub: @b-tierney
-- Github Repository for this tutorial: 
+- Github Repository for this tutorial: https://github.com/b-tierney/microbiome-association-demo-t2d
 - web: http://www.bradentierney.com
 
 
