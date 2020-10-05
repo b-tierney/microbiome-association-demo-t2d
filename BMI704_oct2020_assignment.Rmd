@@ -1,0 +1,248 @@
+---
+title: "Running a microbiome association study"
+output: html_notebook
+---
+
+### Contact information:
+- Braden Tierney (btierney <at> g dot harvard dot edu)
+- Twitter: @BradenTierney
+- GitHub: @b-tierney
+- web: http://www.bradentierney.com
+
+
+### First, install and download the packages required for analysis
+```{r, eval=FALSE}
+install.packages('tidyverse')
+install.packages('skimr')
+install.packages('broom')
+install.packages('ggplot2')
+install.packages('pheatmap')
+```
+
+
+```{r}
+#load necessary packages
+
+library(tidyverse)
+library(skimr)
+library(pheatmap)
+library(broom)
+library(ggplot2)
+
+```
+
+One of the papers you read for this week was Qin et al 2012. They describe a Metagenome-Association-Study with Type 2 Diabetes (T2D). In 2015 however, Forslund et al (https://pubmed.ncbi.nlm.nih.gov/26633628/) re-analyzed the data in that paper, finding that their results were heavily confounded. Instead of finding associations between the microbiome and disease, that did not account for patients that were on Metformin (a commond antidiabetic drug) and had identified microbes associated with Metformin instead of T2D. 
+
+Today, you're going to be working with a subset of the data from the Qin paper to reproduce this result to show how microbes can be associated with either disease status or drug usage or both. Here are the three steps in this brief tutorial:
+
+1) Explore the microbiome data and the metadata.
+2) Compute simple, univariate associations between the microbiome taxonomic features and T2D.
+3) Compute more complicated, multivariate associations between microbiome taxonomic features and T2D.
+4) Compare the output of steps 2 and 3.
+
+To be clear, you are currently working with taxonomic microbiome abundances (e.g. the relative abundance of different genera and species) that was acquired using a reference-based approach.
+
+###Data Exploration
+
+```{r load data}
+#load in and summarize the microbiome and human phenotype data 
+metadata <- readRDS(url("","rb"))
+abundance <- readRDS(url("","rb"))
+
+print(head(metadata))
+
+```
+The first task is to wrap our heads around the metadata (the human phenotypic data) that we're working with.
+
+Based on the dimension of the metadata dataframe, we have 140 unique subjects. We have 7 columns in our metadata, one corresponding to a subject ID, one "study_condition" column that indicates whether an individual had hypertension (1) or not (0). The other columns correspond to the following data:
+
+study_condition: Healthy (0) vs T2D (1)
+age: age of subject in years
+age_category: adult vs child etc
+gender: male/female
+country: country of origin for the individual
+number_reads: sequencing depth
+BMI: body mass index
+dyastolic_p: dyastolic blood pressure
+systolic_p: systolic blood pressure
+cholesterol: cholesterol levels
+Metformin: Indicates if a patient was on metformin at the time of sampling.
+
+First, let's use the skimr package to take a look at the number of cases vs controls we have, as well as summary statistics for the other columns. Take particular note of the counts of Metformin and study_condition variables.
+
+```{r metadata summary}
+
+skimr::skim(metadata %>% mutate(study_condition=as.character(study_condition)))
+
+```
+
+Now let's check if any of the variables we have here are statistically associated with T2D in a simple linear model. The following line of code will associate all the metadata variables with the study condition value and then use the broom package (the tidy command) to clean up the output and present it in a nice dataframe.
+
+```{r exploratory regression}
+
+lm(study_condition ~ ., data = metadata %>% select(-subjectID),family='binomial') %>% tidy
+
+```
+
+As you see, BMI, age, gender, and Metformin usage are all associated with the probability of an individual having Type 2 Diabetes. 
+
+Now let's look at the underlying correlation structure of the metadata. Are any variables highly associated with each other?
+
+```{r correlation analysis}
+pheatmap(metadata %>% select(-subjectID) %>% select_if(is.numeric) %>% cor)
+
+```
+None of the correlations seem too high, so we can probably include all of them in the same model.
+
+Now let's look at the microbiome abundance data. We're going to use the dimensionality reduction technique prinicpal-componenet-analysis to see if there is any underlying structure to the data that correlates to disease presence. This plot will be colored by the metadata study_condition variable to indicate if a sample was healthy or not. Each point will correspond to a different sample.
+
+```{r pca analysis}
+
+print(dim(abundance))
+
+print(abundance[1:5,1:5])
+
+principal_comp_analysis = prcomp(abundance %>% select(-subjectID),center=TRUE,scale.=TRUE)
+
+#plot the first two componenets against each other and color by disease status
+print(ggplot(data = metadata, aes(x=principal_comp_analysis$x[,1],y=principal_comp_analysis$x[,2],color=factor(study_condition))) + geom_point() + xlab('Component 1') + ylab('Component 2') + ggtitle('PCA on microbe abundance data'))
+
+```
+
+We once again have 145 subjects, and we have 650 columns, each of which corresponds to a single microbiome feature. Note that we have everything from the kingdom bacteria to individual strains here. The column names describe the taxonomic rank and names of these. The units are in terms of relative abundance of each group (ie how much of each microbial feature is in each sample).
+
+In the PCA plot, we see what may be 2 clusters -- but do they look like they correspond to diseased vs healthy individuals? 
+
+###Step 2: A simple metagenome-association study
+
+Now for the first round of associations! All we're going to do is use a simple loop to compute a UNIVARIATE linear model of the form:
+
+microbial_feature ~ study_condition
+
+Note that this is the same as a pearson correlation or a t-test.
+
+We will do this for all ~650 microbial features in the dataset. 
+
+Recall that the study condition variable indicates if a person has T2D or not.
+
+This is as simple as it gets, and honestly it's equivalent to what the majority of microbiome association studies do.
+
+This is going to run hundreds of associations though -- it may take about 30 seconds.
+```{r compute univariate associations}
+#merge the abundance data and the metadata on the subjectID column
+
+merged_data = inner_join(metadata,abundance)
+
+#create a list of column names that we are going to compute our associations for (these are the names of the columns from the abundance matrix)
+
+microbe_names = abundance %>% select(-subjectID) %>% colnames 
+#we will use this function to compute associations
+run_association_univariate <- function(column_name,dataset){
+  association_output = tidy(lm(dataset[,column_name] ~ study_condition,data=dataset)) %>% filter(term!='(Intercept)') %>% mutate(microbial_feature_name = column_name) 
+  return(association_output)
+}
+
+full_association_output_uni = map(microbe_names, function(x) run_association_univariate(x,merged_data)) %>% bind_rows %>% mutate(pvalue_adjusted = p.adjust(p.value, method='BY'))
+
+print(head(full_association_output_uni))
+
+```
+
+```{r adjust pvalues}
+
+full_association_output_uni = full_association_output_uni %>% mutate(pvalue_adjusted = p.adjust(p.value, method='BY'))
+
+paste('You have found',full_association_output_uni %>% filter(term=='study_condition', pvalue_adjusted<0.05) %>% nrow,'statistically significant associations between microbial features and T2D.')
+paste('You have found',full_association_output_uni %>% filter(term=='study_condition',pvalue_adjusted<0.05, estimate>0) %>% nrow,'POSITIVE statistically significant associations between microbial features and T2D.')
+paste('You have found',full_association_output_uni %>% filter(term=='study_condition',pvalue_adjusted<0.05, estimate<0) %>% nrow,'NEGATIVE statistically significant associations between microbial features and T2D.')
+
+```
+
+```{r volcano - 1}
+ggplot(data=full_association_output_uni %>% filter(term=='study_condition'),aes(x=estimate,y=-log10(pvalue_adjusted))) + geom_point() + geom_hline(yintercept=-log10(0.05),linetype="dotted") + xlim(-4,4) + ylim(0,6) + ggtitle('Univariate metagenome association study with Type 2 Diabetes')
+```
+###Step 3: Running a multivariate metagenome-association-study 
+
+Now for the second round of associations! All we're going to do is compute a MULTIVARIATE linear model of the form:
+
+microbial_feature ~ study_condition + age + age_category + Metformin + BMI + cholesterol + dyastolic_p + systolic_p + number_reads
+
+We will again do this for all ~600 microbial features in the dataset. 
+
+```{r compute multivariate associations}
+
+#we will use this function to compute associations
+run_association_multivariate <- function(column_name,dataset){
+  association_output = tidy(lm(dataset[,column_name] ~ study_condition + age + age_category + Metformin + BMI + cholesterol + dyastolic_p + systolic_p + number_reads,data=dataset)) %>% filter(term!='(Intercept)') %>% mutate(microbial_feature_name = column_name)
+  return(association_output)
+}
+
+#use vectorized mapping function to quickly run our associations
+
+full_association_output_multi = map(microbe_names, function(x) run_association(x,merged_data)) %>% bind_rows
+
+print(head(full_association_output_multi))
+```
+
+```{r adjust pvalues - 2}
+
+full_association_output_multi = full_association_output_multi %>% mutate(pvalue_adjusted = p.adjust(p.value, method='BY'))
+
+paste('You have found',full_association_output_multi %>% filter(term=='study_condition', pvalue_adjusted<0.05) %>% nrow,'statistically significant associations between microbial features and T2D.')
+paste('You have found',full_association_output_multi %>% filter(term=='study_condition',pvalue_adjusted<0.05, estimate>0) %>% nrow,'POSITIVE statistically significant associations between microbial features and T2D.')
+paste('You have found',full_association_output_multi %>% filter(term=='study_condition',pvalue_adjusted<0.05, estimate<0) %>% nrow,'NEGATIVE statistically significant associations between microbial features and T2D.')
+
+```
+We identified 31 species that were statistically associated with T2D. This is great! Note that they are all negatively associated with disease, which means that they are enriched in healthy people and de-enriched in diabetics.
+
+Now we'll look at the overall output with a volcano plot again.
+```{r volcano - 2}
+ggplot(data=full_association_output_multi %>% filter(term=='study_condition'),aes(x=estimate,y=-log10(pvalue_adjusted))) + geom_point() + geom_hline(yintercept=-log10(0.05),linetype="dotted") + xlim(-4,4) + ylim(0,6) + ggtitle('Multivariate metagenome association study with Type 2 Diabetes')
+```
+
+
+###STEP 4
+Now we need to compare our univariate associations to those that are confounded by metformin usage. We're going to merge them into a single dataframe now and return associations that changed sign when adjusting for metformin usage and other variables.
+
+```{r merge and compare associations}
+
+#first filter for the necessary columns in the association output dataframes and change their names to make them more easy to understand
+
+full_association_output_uni_subset = full_association_output_uni %>% select(microbial_feature_name,estimate,pvalue_adjusted) %>% filter(pvalue_adjusted<0.05)
+colnames(full_association_output_subset) = c('microbial_feature_name','univariate_estimate_univariate','pvalue_adjusted_univariate')
+
+full_association_output_multi_subset = full_association_output_multi %>% filter(term=='study_condition') %>% select(microbial_feature_name,estimate,pvalue_adjusted)
+colnames(full_association_output_multi_subset) = c('microbial_feature_name','univariate_estimate_multivariate','pvalue_adjusted_multivariate')
+
+all_association_output = left_join(full_association_output_uni_subset,full_association_output_multi_subset)
+
+all_association_output %>% filter(pvalue_adjusted_multivariate<0.05)
+```
+
+Use the command `view(all_association_output)` to see how the estimate sizes and pvalues changed between the two modeling strategies. 
+
+The big takeaway here is simple:
+
+With univariate associations, you get 84 significant features. With multivariate associations, only 31/84 are significant. So over half of those initial associations were confounded by one of the adjusters you included in the second modeling strategy! This gets at the heart of the challenge of the microbiome, which is the same on that Qin et al faced and Forslund et al pointed out. So many things -- diet, drugs, age -- affect microbiome composition It's very hard to know how to compute a metagenome-association-study correctly! It's up to the researcher to do what we did here -- thoroughly explore the metadata and try many different modeling strategies before coming to any conclusions. 
+
+###Required questions
+
+1) What would be the correct course of action if two metadata variables were highly correlated? Should they be included in the multivariate model together?
+
+2) In the exploratory regression, we saw that age variables, BMI, metformin usage, and sex were all associated with T2D. Does this make them more or less likely to confound T2D-microbiome associations?
+
+3) Could you take anything meaningful away from the PCA plot?
+
+4) What is the interpretation of a statistically positive significant association (adjusted p value < 0.05) between a given microbial taxonomic feature and T2D in the univariate model? In the multivariate model? 
+
+5) Why did we adjust for multiple hypothesis testing?
+
+6) Why did the results between steps 2 and 3 change? How did they change?
+
+7) Consider what was discussed in the presentation regarding vibration of effects and model choice. In this case, you had 9 independent variables you could put in your models as adjusters (for example, metformin usage). How many total models could you fit if you used every possible combination of these variables? Given how drastically the results changed between steps 2 and 3, would you expect them to change more for each modeling strategy? 
+
+###Optional questions
+1) We only showed that confounding is happening based on the fact that the association output change. How would you identify the specific confounders that are affecting specific microbial features? 
+
+2) You have 31 microbes that may be associated with T2D. Propose a follow-up experiment in the wet lab to test if they are causal for disease.
+
