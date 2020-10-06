@@ -251,8 +251,12 @@ With univariate associations, you get 84 significant features. With multivariate
 
 7) Consider what was discussed in the presentation regarding vibration of effects and model choice. In this case, you had 9 independent variables you could put in your models as adjusters (for example, metformin usage). How many total models could you fit if you used every possible combination of these variables? Given how drastically the results changed between steps 2 and 3, would you expect them to change more for each modeling strategy? 
 
-### Optional questions
-1) We only showed that confounding is happening based on the fact that the association output change. How would you identify the specific confounders that are affecting specific microbial features? 
+8) Thinking back to the presentation - this was a species-level analysis. Let's say you did this at the gene-level. What would be some additional challenges you might face? How would the biological interpretation change?
 
-2) You have 31 microbes that may be associated with T2D. Propose a follow-up experiment in the wet lab to test if they are causal for disease.
+### Optional questions
+1) Similarly, how does the biological interpretation of a species-level vs. a family-level association change?
+
+2) We only showed that confounding is happening based on the fact that the association output change. How would you identify the specific confounders that are affecting specific microbial features? 
+
+3) You have 31 microbes that may be associated with T2D. Propose a follow-up experiment in the wet lab to test if they are causal for disease.
 
