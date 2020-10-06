@@ -253,10 +253,11 @@ With univariate associations, you get 84 significant features. With multivariate
 
 8) Thinking back to the presentation - this was a species-level analysis. Let's say you did this at the gene-level. What would be some additional challenges you might face? How would the biological interpretation change?
 
+9) Similarly, how does the biological interpretation of a species-level vs. a family-level association change?
+
+10) We only showed that confounding is happening based on the fact that the association output change. How would you identify the specific confounders that are affecting specific microbial features? 
+
 ### Optional questions
-1) Similarly, how does the biological interpretation of a species-level vs. a family-level association change?
 
-2) We only showed that confounding is happening based on the fact that the association output change. How would you identify the specific confounders that are affecting specific microbial features? 
-
-3) You have 31 microbes that may be associated with T2D. Propose a follow-up experiment in the wet lab to test if they are causal for disease.
+1) You have 31 microbes that may be associated with T2D. Propose a follow-up experiment in the wet lab to test if they are causal for disease.
 
